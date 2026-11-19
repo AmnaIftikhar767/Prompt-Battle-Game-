@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt Battle Load Test</title>
+<style>
+:root{--bg:#0f0b24;--panel:#1c1739;--line:#3a3170;--fg:#f4f1ff;--muted:#aaa2d8;--green:#41e39a;--red:#ff6b6b;--gold:#ffd23f;color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Segoe UI",system-ui,sans-serif;padding:24px max(16px,env(safe-area-inset-left,0px))}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:18px}
+h1{margin:0;font-size:28px}
+button{font:700 16px system-ui;border:0;border-radius:12px;padding:12px 20px;background:var(--gold);color:#160f33;cursor:pointer}
+button:disabled{opacity:.5}
+select{font:700 15px system-ui;padding:10px;border-radius:10px;background:#120d2b;color:var(--fg);border:2px solid var(--line)}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stats div{background:#120d2b;border-radius:12px;padding:12px}
+.stats b{display:block;font-size:28px;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.cell{background:#120d2b;border:2px solid var(--line);border-radius:10px;overflow:hidden;font-size:12px;text-align:center}
+.cell img{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:#0a0720}
+.cell.ok{border-color:var(--green)} .cell.bad{border-color:var(--red)}
+.cell span{display:block;padding:4px}
+pre{background:#120d2b;border-radius:10px;padding:12px;white-space:pre-wrap;margin:0}
+@media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
+</style></head><body><div class="wrap">
+<h1>Prompt Battle · Load Test</h1>
+<div class="panel">
+  <p style="margin-top:0">Checks the setup, then sends many picture requests <b>at the same time</b>, like a full class pressing Submit together. Each test costs a few cents of image credits.</p>
+  <pre id="health">Checking setup…</pre>
+</div>
+<div class="panel row">
+  <label for="count">Requests at once</label>
+  <select id="count"><option>10</option><option selected>30</option><option>50</option></select>
+  <button id="go" type="button">Start test</button>
+</div>
+<div class="stats">
+  <div><span>Done</span><b id="sDone">0</b></div>
+  <div><span>Failed</span><b id="sFail" style="color:var(--red)">0</b></div>
+  <div><span>Average time</span><b id="sAvg">–</b></div>
+  <div><span>Slowest</span><b id="sMax">–</b></div>
+</div>
+<div class="grid" id="grid"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+fetch("api/health",{cache:"no-store"}).then(r=>r.json()).then(h=>{
+  $("health").textContent=`Database: ${h.database}\nImage providers (in order): ${h.imageProviders.join(" → ")}\nDashboard PIN: ${h.dashboardPin}`;
+}).catch(()=>{ $("health").textContent="Could not reach api/health. Open this page from the live Vercel link."; });
+const subjects=["cat","dog","robot","rocket","castle","tree","car","boat","owl","lion","train","house","bicycle","dragon","balloon","penguin","guitar","volcano","island","bus"];
+const looks=["red","blue","green","golden","purple","orange","pink","silver"];
+$("go").onclick=async()=>{
+  const n=+$("count").value; $("go").disabled=true; $("grid").innerHTML="";
+  let done=0,fail=0,times=[]; const run=Date.now();
+  const upd=()=>{ $("sDone").textContent=done; $("sFail").textContent=fail;
+    if(times.length){ $("sAvg").textContent=(times.reduce((a,b)=>a+b,0)/times.length/1000).toFixed(1)+"s"; $("sMax").textContent=(Math.max(...times)/1000).toFixed(1)+"s"; } };
+  upd();
+  await Promise.all(Array.from({length:n},(_,i)=>{
+    const prompt=`a ${looks[i%looks.length]} ${subjects[i%subjects.length]} in a park, cartoon style, test ${run}-${i}`;
+    const cell=document.createElement("div"); cell.className="cell"; cell.innerHTML=`<img alt=""><span>#${i+1} …</span>`; $("grid").appendChild(cell);
+    const t0=performance.now();
+    return fetch(`api/image?prompt=${encodeURIComponent(prompt)}&seed=${i+1}`).then(async r=>{
+      const ms=performance.now()-t0;
+      if(!r.ok) throw new Error(r.status);
+      const blob=await r.blob(); cell.querySelector("img").src=URL.createObjectURL(blob);
+      cell.className="cell ok"; cell.querySelector("span").textContent=`${(ms/1000).toFixed(1)}s · ${r.headers.get("X-Image-Provider")||""}`;
+      done++; times.push(ms);
+    }).catch(e=>{ fail++; cell.className="cell bad"; cell.querySelector("span").textContent="failed "+e.message; }).finally(upd);
+  }));
+  $("go").disabled=false;
+};
+</script>
+</body></html>

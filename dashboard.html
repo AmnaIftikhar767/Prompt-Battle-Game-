@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt Battle Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: projector-friendly control room — live stats, top-3 podium, full score table */
+:root{
+  --bg:#0f0b24; --panel:#1c1739; --line:#3a3170; --fg:#f4f1ff; --muted:#aaa2d8;
+  --pink:#ff4fa3; --cyan:#3fe0ff; --gold:#ffd23f; --green:#41e39a; --red:#ff6b6b; --ink:#160f33;
+  --display:"Fredoka","Trebuchet MS",system-ui,sans-serif; --body:"Nunito","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);
+  background-image:radial-gradient(60vw 50vh at 0% 0%,rgba(110,60,255,.22),transparent 60%),radial-gradient(50vw 50vh at 100% 100%,rgba(255,79,163,.14),transparent 60%);
+  min-height:100vh;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px}
+.wrap{max-width:1300px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2{font-family:var(--display);margin:0;line-height:1.1}
+button,select,input{font:700 15px var(--body);border-radius:12px}
+button{border:0;padding:10px 16px;cursor:pointer;background:var(--gold);color:var(--ink)}
+button.ghost{background:transparent;color:var(--fg);border:2px solid var(--line)}
+button.danger{background:transparent;color:var(--red);border:2px solid var(--red)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+select,input{padding:10px 12px;border:2px solid var(--line);background:#120d2b;color:var(--fg);min-width:0}
+.panel{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:18px}
+.label{font:800 12px var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.brand h1{font-size:clamp(26px,4vw,40px)} .brand h1 .a{color:var(--pink)} .brand h1 .b{color:var(--cyan)}
+.live{display:inline-flex;align-items:center;gap:8px;font:800 13px var(--body);color:var(--green)}
+.live i{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(65,227,154,.7);animation:pulse 1.6s infinite}
+.live.off{color:var(--red)} .live.off i{background:var(--red);animation:none}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(65,227,154,0)}100%{box-shadow:0 0 0 0 rgba(65,227,154,0)}}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat b{display:block;font:700 40px var(--display);line-height:1.1;font-variant-numeric:tabular-nums}
+.stat.p b{color:var(--cyan)} .stat.f b{color:var(--green)} .stat.t b{color:var(--gold)}
+.podium{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:14px;align-items:end}
+.pod{text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center;border-radius:18px;padding:16px 10px;border:2px solid var(--line);background:var(--panel);min-width:0}
+.pod .medal{font-size:38px;line-height:1}
+.pod .nm{font:700 22px var(--display);overflow-wrap:anywhere}
+.pod .sc{font:700 30px var(--display);color:var(--gold);font-variant-numeric:tabular-nums}
+.pod.g1{border-color:var(--gold);padding-block:26px;box-shadow:0 0 40px rgba(255,210,63,.18)}
+.pod.empty{opacity:.4}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.filters input{flex:1 1 200px}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;min-width:980px}
+th,td{text-align:left;padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font:800 11px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+th small{display:block;font-weight:700;letter-spacing:0;text-transform:none;opacity:.8}
+td.num{text-align:right} th.num{text-align:right}
+td.total{font:700 20px var(--display);color:var(--gold);text-align:right}
+td.name{font-weight:800;font-size:16px}
+td.name small{display:block;font-weight:600;color:var(--muted);font-size:13px}
+tr.flash td{animation:flash 1.6s ease}
+@keyframes flash{0%{background:rgba(255,210,63,.25)}100%{background:transparent}}
+.rank{font:700 18px var(--display);width:44px}
+.bar{width:120px;height:9px;border-radius:5px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--green))}
+.prog{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:700}
+.pill{display:inline-block;font:800 12px var(--body);border-radius:999px;padding:3px 10px;border:1px solid}
+.pill.playing{color:var(--cyan);border-color:var(--cyan)}
+.pill.finished{color:var(--green);border-color:var(--green)}
+.pill.idle{color:var(--muted);border-color:var(--line)}
+.code{font:700 14px var(--display);letter-spacing:.12em;color:var(--gold)}
+.empty-msg{padding:30px;text-align:center;color:var(--muted);font-weight:700}
+.notice{border-color:var(--red);color:var(--fg)}
+.notice h2{color:var(--red);font-size:20px;margin-bottom:8px}
+.notice ol{margin:8px 0 0;padding-left:20px;color:var(--muted)}
+.gate{max-width:380px;margin:12vh auto 0;display:flex;flex-direction:column;gap:12px;text-align:center}
+.x{background:none;border:0;color:var(--muted);padding:4px 8px;font-size:16px}
+.x:hover{color:var(--red)}
+@media (max-width:820px){ .stats{grid-template-columns:repeat(2,1fr)} .podium{grid-template-columns:1fr} .pod.g1{order:-1} }
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel gate" id="gate" hidden>
+    <h1 style="font-size:28px">Teacher dashboard</h1>
+    <p style="color:var(--muted);margin:0">Enter the dashboard PIN.</p>
+    <form id="pinForm" style="display:flex;gap:8px"><input id="pinIn" type="password" inputmode="numeric" placeholder="PIN" style="flex:1" aria-label="PIN"><button type="submit">Open</button></form>
+    <p id="pinErr" style="color:var(--red);margin:0;font-weight:800"></p>
+  </div>
+
+  <div id="main" class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="label">Ignite School · AI Competition</div>
+        <h1><span class="a">Prompt</span> <span class="b">Battle</span> · Live Dashboard</h1>
+      </div>
+      <div class="actions">
+        <span class="live" id="live"><i></i><span id="liveTxt">Connecting…</span></span>
+        <button class="ghost" id="refreshBtn" type="button">↻ Refresh</button>
+        <button class="ghost" id="csvBtn" type="button">⬇ Download CSV</button>
+        <button class="ghost" id="fsBtn" type="button">⛶ Full screen</button>
+      </div>
+    </div>
+
+    <div class="panel notice" id="notice" hidden></div>
+
+    <div class="stats">
+      <div class="panel stat"><span class="label">Players joined</span><b id="sJoined">0</b></div>
+      <div class="panel stat p"><span class="label">Playing now</span><b id="sPlaying">0</b></div>
+      <div class="panel stat f"><span class="label">Finished</span><b id="sFinished">0</b></div>
+      <div class="panel stat t"><span class="label">Top score</span><b id="sTop">0</b></div>
+    </div>
+
+    <div class="podium" id="podium"></div>
+
+    <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+      <div class="filters">
+        <h2 style="font-size:22px;margin-right:auto">All players</h2>
+        <select id="fClass" aria-label="Filter by class"><option value="">All classes</option><option>Class 5</option><option>Class 6</option><option>Class 7</option><option>Class 8</option></select>
+        <select id="fStatus" aria-label="Filter by status"><option value="">All status</option><option value="playing">Playing</option><option value="finished">Finished</option></select>
+        <input id="fSearch" placeholder="Search name or school" aria-label="Search">
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr>
+          <th>#</th><th>Player</th><th>Class</th>
+          <th class="num">Round 1<small>max 300</small></th><th class="num">Round 2<small>max 600</small></th><th class="num">Round 3<small>max 1000</small></th>
+          <th class="num">Total<small>max 1900</small></th><th>Stars</th><th>Progress</th><th>Status</th><th>Time</th><th>Code</th><th></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+    </div>
+
+    <div class="row" style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="danger" id="resetBtn" type="button">Clear all players</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ROUNDS = [{pics:3,max:300},{pics:4,max:600},{pics:5,max:1000}];
+const REFRESH_MS = 4000, IDLE_MIN = 8;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let pin = ""; try { pin = sessionStorage.getItem("pb-pin") || ""; } catch(e){}
+let players = [], lastTotals = {}, lastOk = 0, timer = null;
+
+async function api(method, body){
+  const r = await fetch("api/players" + (pin ? "?pin=" + encodeURIComponent(pin) : ""), {
+    method, cache:"no-store", headers: body ? {"Content-Type":"application/json"} : {}, body: body ? JSON.stringify(body) : undefined });
+  let j = {}; try { j = await r.json(); } catch(e){}
+  return { status:r.status, data:j };
+}
+
+async function load(){
+  try{
+    const { status, data } = await api("GET");
+    if (status === 401){ showGate(pin ? "Wrong PIN" : ""); return; }
+    if (status === 503 || status === 404){ showNotice(status); setLive(false, "Not connected"); return; }
+    if (status !== 200) throw new Error(data.error || status);
+    $("notice").hidden = true; $("gate").hidden = true; $("main").hidden = false;
+    players = data.players || []; lastOk = Date.now(); setLive(true); render();
+  }catch(e){ setLive(false, "Connection lost, retrying…"); }
+}
+function setLive(on, txt){ $("live").classList.toggle("off", !on); $("liveTxt").textContent = on ? "Live · updated just now" : txt; }
+setInterval(()=>{ if (lastOk && !$("live").classList.contains("off")){ const s=Math.round((Date.now()-lastOk)/1000); $("liveTxt").textContent = `Live · updated ${s<3?"just now":s+"s ago"}`; } }, 1000);
+
+function showGate(err){ $("main").hidden = true; $("gate").hidden = false; $("pinErr").textContent = err || ""; $("pinIn").focus(); }
+$("pinForm").onsubmit = e => { e.preventDefault(); pin = $("pinIn").value.trim(); try{ sessionStorage.setItem("pb-pin", pin); }catch(e){} load(); };
+
+function showNotice(status){
+  const n = $("notice"); n.hidden = false;
+  n.innerHTML = status === 404
+    ? `<h2>Dashboard needs the live website</h2><p>Open this page from your Vercel link (for example <b>your-site.vercel.app/dashboard.html</b>), not as a file on the computer.</p>`
+    : `<h2>Database is not connected yet</h2><p>Connect the free database once in Vercel:</p>
+       <ol><li>Vercel → your project → <b>Storage</b> → <b>Create Database</b> → choose <b>Upstash for Redis</b> (free plan).</li>
+       <li>Connect it to this project, then go to <b>Deployments → Redeploy</b>.</li>
+       <li>Refresh this page.</li></ol>
+       <p style="margin-top:8px">To check the setup, open <b>api/health</b> on your site (for example <b>your-site.vercel.app/api/health</b>).</p>`;
+}
+
+function roundOf(p){ let n = p.pictures, r = 0; for (const R of ROUNDS){ if (n < R.pics) return r+1; n -= R.pics; r++; } return ROUNDS.length; }
+function statusOf(p){ if (p.status === "finished") return "finished"; return (Date.now() - p.updated) > IDLE_MIN*60000 ? "idle" : "playing"; }
+const fmtTime = s => `${Math.floor(s/60)}m ${String(s%60).padStart(2,"0")}s`;
+const sorted = () => [...players].sort((a,b)=> b.total-a.total || a.secs-b.secs);
+
+function render(){
+  const all = sorted();
+  $("sJoined").textContent = all.length;
+  $("sPlaying").textContent = all.filter(p=>statusOf(p)==="playing").length;
+  $("sFinished").textContent = all.filter(p=>p.status==="finished").length;
+  $("sTop").textContent = all.length ? all[0].total : 0;
+
+  const pods = [all[1], all[0], all[2]], medals = ["🥈","🥇","🥉"], cls = ["g2","g1","g3"];
+  $("podium").innerHTML = pods.map((p,i)=> p
+    ? `<div class="pod ${cls[i]}"><div class="medal">${medals[i]}</div><div class="nm">${esc(p.name)}</div><div class="label">${esc(p.cls)}${p.school?" · "+esc(p.school):""}</div><div class="sc">${p.total}</div></div>`
+    : `<div class="pod ${cls[i]} empty"><div class="medal">${medals[i]}</div><div class="nm">Waiting…</div></div>`).join("");
+
+  const fc = $("fClass").value, fs = $("fStatus").value, q = $("fSearch").value.trim().toLowerCase();
+  const rows = all.map((p,i)=>({p,rank:i+1})).filter(({p})=>
+    (!fc || p.cls===fc) && (!fs || (fs==="finished" ? p.status==="finished" : p.status!=="finished")) &&
+    (!q || (p.name+" "+p.school).toLowerCase().includes(q)));
+  if (!rows.length){ $("rows").innerHTML = `<tr><td colspan="13" class="empty-msg">${players.length ? "No players match these filters." : "No players yet. Scores appear here as soon as students press Start Battle."}</td></tr>`; return; }
+  $("rows").innerHTML = rows.map(({p,rank})=>{
+    const st = statusOf(p), pct = Math.round(p.pictures/(p.totalPictures||12)*100), changed = lastTotals[p.id] !== undefined && lastTotals[p.id] !== p.total;
+    const r = p.rounds || [];
+    return `<tr class="${changed?"flash":""}">
+      <td class="rank">${rank<=3?["🥇","🥈","🥉"][rank-1]:rank}</td>
+      <td class="name">${esc(p.name)}<small>${esc(p.school||"")}</small></td>
+      <td>${esc(p.cls)}</td>
+      ${ROUNDS.map((_,k)=>`<td class="num">${r[k] ?? 0}</td>`).join("")}
+      <td class="total">${p.total}</td>
+      <td style="color:var(--gold);font-weight:800">${p.stars}★</td>
+      <td><div class="prog"><div class="bar"><i style="width:${pct}%"></i></div>${p.status==="finished" ? "All done" : `Round ${roundOf(p)} · ${p.pictures}/${p.totalPictures||12} pictures`}</div></td>
+      <td><span class="pill ${st}">${st==="finished"?"Finished":st==="idle"?"Idle":"Playing"}</span></td>
+      <td>${fmtTime(p.secs||0)}</td>
+      <td class="code">${esc(p.code||"–")}</td>
+      <td><button class="x" data-id="${esc(p.id)}" title="Remove this player" aria-label="Remove ${esc(p.name)}">✕</button></td>
+    </tr>`; }).join("");
+  lastTotals = Object.fromEntries(players.map(p=>[p.id,p.total]));
+  document.querySelectorAll(".x").forEach(b => b.onclick = async ()=>{
+    if (!b.dataset.sure){ b.dataset.sure = "1"; b.textContent = "Remove?"; setTimeout(()=>{ b.dataset.sure=""; b.textContent="✕"; }, 3000); return; }
+    await api("POST", { action:"remove", id:b.dataset.id }); load(); });
+}
+
+["fClass","fStatus","fSearch"].forEach(id => $(id).addEventListener("input", render));
+$("refreshBtn").onclick = load;
+$("fsBtn").onclick = ()=>{ (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(()=>{}); };
+$("resetBtn").onclick = async ()=>{
+  const b = $("resetBtn");
+  if (!b.dataset.sure){ b.dataset.sure="1"; b.textContent="Press again to delete ALL players"; setTimeout(()=>{ b.dataset.sure=""; b.textContent="Clear all players"; }, 4000); return; }
+  await api("POST", { action:"reset" }); b.dataset.sure=""; b.textContent="Clear all players"; load();
+};
+$("csvBtn").onclick = ()=>{
+  const head = ["Rank","Name","Class","School","Round 1","Round 2","Round 3","Total","Stars","Pictures done","Status","Time (s)","Result code"];
+  const lines = sorted().map((p,i)=>[i+1,p.name,p.cls,p.school,...ROUNDS.map((_,k)=>(p.rounds||[])[k]??0),p.total,p.stars,p.pictures,p.status,p.secs,p.code]
+    .map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(","));
+  const blob = new Blob(["﻿" + [head.join(","), ...lines].join("\n")], {type:"text/csv"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "prompt-battle-results.csv"; a.click();
+};
+
+load(); timer = setInterval(load, REFRESH_MS);
+</script>
+</body>
+</html>

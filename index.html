@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prompt Battle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: full-window arcade. Home = split screen (logo + entry | round ladder).
+   Battle = HUD bar across the top, two big picture frames, control panel on the right. */
+:root{
+  --bg:#0d0920; --panel:rgba(30,24,64,.86); --panel2:rgba(14,10,34,.85); --line:#3a3170; --fg:#f4f1ff; --muted:#aaa2d8;
+  --pink:#ff4fa3; --cyan:#3fe0ff; --gold:#ffd23f; --green:#41e39a; --red:#ff6b6b; --ink:#160f33;
+  --display:"Fredoka","Trebuchet MS",system-ui,sans-serif;
+  --body:"Nunito","Segoe UI",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--body);overflow-x:hidden}
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;display:block}
+.glow{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(55vw 55vh at 8% 0%,rgba(110,60,255,.32),transparent 60%),radial-gradient(50vw 50vh at 100% 100%,rgba(255,79,163,.2),transparent 60%)}
+#root{position:relative;z-index:1;min-height:100%;display:flex;flex-direction:column}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.05;text-wrap:balance}
+p{margin:0}
+button{font:700 16px var(--display);border:0;border-radius:14px;padding:12px 22px;cursor:pointer;color:var(--ink);background:var(--gold);transition:transform .12s, box-shadow .12s, filter .12s;box-shadow:0 5px 0 #b8901a}
+button:hover{transform:translateY(-2px);filter:brightness(1.06)}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #b8901a}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+button.pink{background:var(--pink);color:#fff;box-shadow:0 5px 0 #a8255f}
+button.cyan{background:var(--cyan);box-shadow:0 5px 0 #1b9bb3}
+button.ghost{background:rgba(14,10,34,.6);color:var(--fg);border:2px solid var(--line);box-shadow:none}
+button.big{font-size:22px;padding:16px 28px;border-radius:18px}
+.label{font:800 12px var(--body);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.panel{background:var(--panel);backdrop-filter:blur(8px);border:2px solid var(--line);border-radius:22px;padding:22px}
+.screen{flex:1;display:flex;flex-direction:column;min-height:100vh;animation:in .45s ease both;
+  padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));padding-block:16px 20px;gap:16px}
+@keyframes in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.topbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.topbar .sp{flex:1}
+.badge{display:inline-flex;gap:8px;align-items:center;background:rgba(63,224,255,.12);border:1px solid rgba(63,224,255,.45);color:var(--cyan);border-radius:999px;padding:7px 15px;font:800 12px var(--body);letter-spacing:.12em;text-transform:uppercase}
+.iconbtn{padding:9px 14px;font-size:15px}
+
+/* ---------- HOME ---------- */
+.home-grid{flex:1;display:grid;grid-template-columns:minmax(240px,1fr) minmax(460px,1.3fr) minmax(260px,1fr);gap:clamp(20px,3vw,48px);align-items:center;width:100%}
+.home-bot{display:flex;justify-content:center;align-items:flex-end;padding-top:70px}
+.home-center{display:flex;flex-direction:column;align-items:center;text-align:center}
+.logo{font-size:clamp(56px,7vw,112px);letter-spacing:-.01em;line-height:.95}
+.logo{font-weight:700}
+.logo .a{color:var(--pink);text-shadow:0 5px 0 #a8255f,0 0 22px rgba(255,79,163,.45)}
+.logo .b{color:var(--cyan);text-shadow:0 5px 0 #1b8ea6,0 0 22px rgba(63,224,255,.45)}
+.school{font:700 clamp(30px,3.4vw,54px)/1 var(--display);letter-spacing:.06em;text-transform:uppercase;color:#fff;
+  background:linear-gradient(90deg,#ffd23f,#fff 50%,#ffd23f);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 3px 0 rgba(0,0,0,.35))}
+/* home: stage under robot, glowing form, floating art */
+.home-bot{position:relative}
+.home-bot::after{content:"";position:absolute;left:50%;bottom:-6px;width:min(90%,380px);height:56px;transform:translateX(-50%);border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(63,224,255,.55),rgba(110,60,255,.25) 45%,transparent 70%);z-index:-1;animation:stage 3.2s ease-in-out infinite}
+@keyframes stage{50%{opacity:.6;transform:translateX(-50%) scale(.9)}}
+.entry{border:2px solid transparent;border-radius:24px;
+  background:linear-gradient(rgba(22,16,52,.92),rgba(22,16,52,.92)) padding-box,linear-gradient(120deg,var(--pink),var(--cyan),var(--gold),var(--pink)) border-box;
+  background-size:100% 100%,300% 300%;animation:edge 6s linear infinite;box-shadow:0 20px 60px rgba(0,0,0,.45),0 0 40px rgba(110,60,255,.25)}
+@keyframes edge{to{background-position:0 0,300% 0}}
+.entry button{animation:pulseBtn 2s ease-in-out infinite}
+@keyframes pulseBtn{50%{box-shadow:0 5px 0 #b8901a,0 0 28px rgba(255,210,63,.6)}}
+.showcase{position:relative;height:min(62vh,520px);min-height:340px}
+.art-card{position:absolute;width:min(62%,250px);padding:10px 10px 12px;border-radius:20px;background:rgba(22,16,52,.92);border:3px solid var(--cyan);
+  box-shadow:0 18px 50px rgba(0,0,0,.5),0 0 34px rgba(63,224,255,.28);display:flex;flex-direction:column;gap:8px;font:700 14px var(--display);color:var(--muted);text-align:center}
+.art-card.c1{top:4%;left:4%;transform:rotate(-7deg);animation:floatA 5s ease-in-out infinite}
+.art-card.c2{bottom:4%;right:2%;border-color:var(--pink);box-shadow:0 18px 50px rgba(0,0,0,.5),0 0 34px rgba(255,79,163,.3);transform:rotate(6deg);animation:floatB 6s ease-in-out infinite}
+@keyframes floatA{50%{transform:rotate(-4deg) translateY(-14px)}}
+@keyframes floatB{50%{transform:rotate(3deg) translateY(12px)}}
+.art{aspect-ratio:1;border-radius:12px;position:relative;overflow:hidden}
+.art.a1{background:radial-gradient(circle at 70% 28%,#ffe27a 0 11%,transparent 12%),radial-gradient(ellipse 80% 42% at 25% 100%,#3ddc97 0 60%,transparent 61%),radial-gradient(ellipse 70% 36% at 88% 100%,#16a571 0 60%,transparent 61%),linear-gradient(#ff9bcf,#8a5cff 75%)}
+.art.a2{background:radial-gradient(circle at 66% 32%,#ffe27a 0 12%,transparent 13%),radial-gradient(ellipse 80% 40% at 30% 100%,#3ddc97 0 60%,transparent 61%),radial-gradient(ellipse 70% 34% at 85% 100%,#16a571 0 60%,transparent 61%),linear-gradient(#ffb1d8,#7c5cff 75%)}
+.scan{position:absolute;inset:0;background:linear-gradient(180deg,transparent 0 40%,rgba(255,255,255,.55) 50%,transparent 60%);background-size:100% 250%;animation:scan 2.2s linear infinite;mix-blend-mode:overlay}
+@keyframes scan{from{background-position:0 120%}to{background-position:0 -120%}}
+.vs-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font:700 46px var(--display);color:#fff;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle at 35% 30%,#ff7dbd,#ff4fa3 55%,#a8255f);box-shadow:0 0 0 6px rgba(255,79,163,.25),0 0 40px rgba(255,79,163,.6);animation:vsPulse 1.6s ease-in-out infinite;z-index:2}
+@keyframes vsPulse{50%{transform:translate(-50%,-50%) scale(1.1)}}
+.spark{position:absolute;color:var(--gold);font-size:22px;animation:twinkle 2.4s ease-in-out infinite}
+.spark.s1{top:2%;right:18%}.spark.s2{bottom:16%;left:8%;color:var(--cyan);animation-delay:.8s}.spark.s3{top:44%;right:4%;color:var(--pink);animation-delay:1.5s;font-size:16px}
+@keyframes twinkle{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1.2) rotate(20deg)}}
+.tag{color:var(--muted);font-size:clamp(16px,1.3vw,20px);max-width:52ch;margin-top:14px}
+.entry{margin-top:24px;display:grid;grid-template-columns:1fr 150px;gap:12px;width:100%;max-width:560px;text-align:left;padding:20px}
+.entry input,.entry select{font:700 18px var(--body);padding:15px 16px;border-radius:14px;border:2px solid var(--line);background:var(--panel2);color:var(--fg);min-width:0}
+.entry #teamName{grid-column:1/-1}
+.entry button{grid-column:1/-1}
+/* ---------- BUDDY: realistic helper robot on every screen ---------- */
+.hero-head{display:flex;align-items:flex-end;gap:clamp(8px,2vw,28px)}
+.buddy{position:relative;cursor:pointer;flex:none}
+.buddy svg{width:100%;height:auto;display:block;overflow:visible}
+.buddy-bot{width:var(--bw,160px)}
+.bubble{background:#fff;color:var(--ink);font:600 clamp(14px,1.15vw,17px)/1.3 var(--display);padding:10px 16px;border-radius:18px;box-shadow:0 8px 30px rgba(63,224,255,.35);z-index:2}
+.bubble .caret{display:inline-block;width:2px;height:1em;background:var(--pink);margin-left:2px;vertical-align:-2px;animation:caret .8s steps(1) infinite}
+@keyframes caret{50%{opacity:0}}
+.buddy-top .bubble{position:absolute;bottom:97%;left:50%;transform:translateX(-50%);white-space:nowrap;animation:bubTop .4s cubic-bezier(.2,1.5,.4,1) both}
+.buddy-top .bubble::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:10px solid transparent;border-top-color:#fff}
+@keyframes bubTop{from{transform:translateX(-50%) scale(.6);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+.buddy-side{display:flex;align-items:center;gap:14px}
+.buddy-side .bubble{position:relative;order:2;flex:1;min-width:0;animation:bubSide .4s cubic-bezier(.2,1.5,.4,1) both}
+.buddy-side .bubble::after{content:"";position:absolute;right:100%;top:50%;transform:translateY(-50%);border:9px solid transparent;border-right-color:#fff}
+@keyframes bubSide{from{transform:scale(.7);opacity:0}to{transform:none;opacity:1}}
+.bot{animation:bob 3.2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-12px)}}
+.jump .bot{animation:jump .7s cubic-bezier(.3,1.6,.5,1)}
+@keyframes jump{30%{transform:translateY(-36px) rotate(-5deg)}60%{transform:translateY(-8px) rotate(3deg)}}
+.wave{transform-box:view-box;transform-origin:178px 160px;animation:wave 1.4s ease-in-out infinite}
+.cheer .wave{animation-duration:.5s}
+@keyframes wave{0%,100%{transform:rotate(-6deg)}50%{transform:rotate(18deg)}}
+.eye{transform-box:fill-box;transform-origin:center;animation:blink 4.6s infinite}
+@keyframes blink{0%,91%,100%{transform:scaleY(1)}95%{transform:scaleY(.12)}}
+.happy{opacity:0;transition:opacity .2s}
+.cheer .eyes{opacity:0} .cheer .happy{opacity:1}
+.gb{transform-box:fill-box;transform-origin:center;opacity:.55}
+.talking .gb{animation:eq .3s ease-in-out infinite alternate;opacity:1}
+.talking .gb:nth-child(2){animation-delay:.08s}.talking .gb:nth-child(3){animation-delay:.16s}.talking .gb:nth-child(4){animation-delay:.04s}.talking .gb:nth-child(5){animation-delay:.12s}
+@keyframes eq{from{transform:scaleY(.4)}to{transform:scaleY(2.1)}}
+.ant{animation:antGlow 1.2s ease-in-out infinite alternate}
+@keyframes antGlow{from{fill:#ff4fa3}to{fill:#ffd23f}}
+.led{animation:led 1.6s steps(1) infinite}.led:nth-of-type(2){animation-delay:.5s}.led:nth-of-type(3){animation-delay:1s}
+@keyframes led{50%{opacity:.25}}
+.thrust{transform-box:fill-box;transform-origin:center;animation:thr .18s ease-in-out infinite alternate}
+@keyframes thr{from{transform:scale(.85);opacity:.75}to{transform:scale(1.1);opacity:1}}
+.shadow{transform-box:fill-box;transform-origin:center;animation:shad 3.2s ease-in-out infinite}
+@keyframes shad{50%{transform:scale(.78);opacity:.25}}
+.map-head{display:flex;align-items:flex-end;justify-content:center;gap:24px;flex-wrap:wrap;padding-top:46px}
+.box .buddy-top{margin:56px auto 0}
+.ladder{display:flex;flex-direction:column;gap:14px}
+.rung{display:grid;grid-template-columns:56px 1fr auto;gap:16px;align-items:center;padding:18px 20px;border-radius:22px;border:2px solid var(--line);background:var(--panel);position:relative;overflow:hidden}
+.rung .num{font:700 50px var(--display);line-height:1;text-align:center}
+.rung.r1 .num{color:var(--green)} .rung.r2 .num{color:var(--cyan)} .rung.r3 .num{color:var(--pink)}
+.rung h3{font-size:clamp(18px,1.6vw,24px);white-space:nowrap}
+.rung p{color:var(--muted);font-size:14px}
+.rung .dots{display:flex;gap:5px;margin-top:6px}
+.rung .dots i{width:22px;height:22px;border-radius:6px;border:2px solid currentColor;opacity:.85}
+.rung.r1 .dots{color:var(--green)} .rung.r2 .dots{color:var(--cyan)} .rung.r3 .dots{color:var(--pink)}
+.mult{font:700 26px var(--display);color:var(--gold);text-align:right}
+.mult small{display:block;font:800 11px var(--body);letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;max-width:1500px;margin:0 auto}
+.step{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:16px;background:var(--panel2);border:1px solid var(--line)}
+.step b{font:700 26px var(--display);color:var(--gold);line-height:1}
+.step h3{font-size:17px;margin-bottom:2px}.step p{color:var(--muted);font-size:14px}
+
+/* ---------- MAP ---------- */
+.map{flex:1;display:flex;flex-direction:column;justify-content:center;gap:26px;width:100%;max-width:1500px;margin:0 auto}
+.map h2{font-size:clamp(34px,4vw,56px);text-align:center}
+.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.lvl{position:relative;display:flex;flex-direction:column;gap:12px;padding:28px;border-radius:26px;border:2px solid var(--line);background:var(--panel);min-height:300px}
+.lvl .big{font:700 92px var(--display);line-height:.9}
+.lvl.l1 .big{color:var(--green)} .lvl.l2 .big{color:var(--cyan)} .lvl.l3 .big{color:var(--pink)}
+.lvl h3{font-size:30px}
+.lvl p{color:var(--muted)}
+.lvl .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+.pill{font:800 12px var(--body);letter-spacing:.06em;border-radius:999px;padding:5px 11px;background:rgba(10,7,26,.7);border:1px solid var(--line);color:var(--muted)}
+.lvl.locked{opacity:.45;filter:grayscale(.7)}
+.lvl.locked::after{content:"🔒";position:absolute;top:22px;right:24px;font-size:30px}
+.lvl.done{border-color:var(--green)}
+.lvl.current{border-color:var(--gold);box-shadow:0 0 0 5px rgba(255,210,63,.14),0 0 60px rgba(255,210,63,.18);transform:translateY(-6px)}
+.lvl .stars{font-size:22px;letter-spacing:2px;color:var(--gold)}
+.center{display:flex;justify-content:center}
+
+/* ---------- BATTLE ---------- */
+.hud{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;padding:12px 18px;border-radius:20px;background:var(--panel);border:2px solid var(--line)}
+.hud .left{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.roundtag{font:700 20px var(--display);padding:6px 14px;border-radius:12px;background:var(--panel2);border:2px solid currentColor}
+.roundtag.l1{color:var(--green)} .roundtag.l2{color:var(--cyan)} .roundtag.l3{color:var(--pink)}
+.pdots{display:flex;gap:6px}
+.pdots i{width:26px;height:10px;border-radius:5px;background:var(--line)}
+.pdots i.done{background:var(--green)} .pdots i.now{background:var(--gold);box-shadow:0 0 12px rgba(255,210,63,.7)}
+.hud .who{text-align:center}
+.hud .who b{display:block;font:600 22px var(--display)}
+.hud .right{display:flex;justify-content:flex-end}
+.scorechip{font:700 26px var(--display);padding:6px 18px;border-radius:14px;background:var(--panel2);border:2px solid var(--gold);color:var(--gold);font-variant-numeric:tabular-nums}
+.scorechip small{font:800 11px var(--body);letter-spacing:.12em;color:var(--muted);margin-right:8px}
+.screen.fit{height:100vh;min-height:0;overflow:hidden}
+.battle-grid{flex:1;display:grid;grid-template-columns:1fr minmax(340px,420px);gap:18px;min-height:0}
+.frames{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;min-width:0}
+.vs{font:700 52px var(--display);color:var(--pink);text-shadow:0 0 28px rgba(255,79,163,.7)}
+.card{display:flex;flex-direction:column;gap:10px;align-items:center;min-width:0}
+.frame{aspect-ratio:1;width:min(100%,calc(100vh - 210px));max-width:100%;border-radius:22px;overflow:hidden;background:#0a0720;border:4px solid var(--line);position:relative;display:grid;place-items:center}
+.frame.target{border-color:var(--cyan);box-shadow:0 0 50px rgba(63,224,255,.25)} .frame.mine{border-color:var(--pink);box-shadow:0 0 50px rgba(255,79,163,.25)}
+.frame img{width:100%;height:100%;object-fit:cover;display:block;animation:reveal .7s ease}
+@keyframes reveal{from{opacity:0;filter:blur(16px);transform:scale(1.04)}to{opacity:1;filter:none;transform:none}}
+.frame .msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--muted);font-weight:700;font-size:17px}
+.frame .msg .q{font:700 90px var(--display);color:var(--line);display:block;line-height:1}
+.spin{width:54px;height:54px;border-radius:50%;border:6px solid var(--line);border-top-color:var(--gold);animation:sp .9s linear infinite;margin:0 auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
+.side textarea{width:100%;min-height:96px;resize:vertical;font:700 17px var(--body);padding:14px;border-radius:14px;border:2px solid var(--line);background:var(--panel2);color:var(--fg)}
+.side textarea:disabled{opacity:.75}
+.side.submitted textarea{min-height:0;height:70px;resize:none}
+.side.submitted .countrow,.side.submitted .hint{display:none}
+.scoreline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.note{border-radius:12px;padding:10px 14px;font-weight:700;font-size:15px}
+.note.hint{background:rgba(255,210,63,.12);color:var(--gold)}
+.note.warn{background:rgba(255,107,107,.14);color:var(--red)}
+.note.info{background:rgba(63,224,255,.1);color:var(--cyan)}
+.result{display:flex;flex-direction:column;gap:10px;border-top:2px dashed var(--line);padding-top:12px}
+.total{font:700 52px var(--display);line-height:1;font-variant-numeric:tabular-nums;color:var(--gold)}
+.total small{font-size:22px;color:var(--muted)}
+.stars{font-size:30px;letter-spacing:4px;color:var(--gold)}
+.break{display:flex;flex-direction:column;gap:2px;font-size:14px;font-variant-numeric:tabular-nums}
+.break div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding-block:4px}
+.break .neg{color:var(--red)}
+.kw{display:flex;flex-wrap:wrap;gap:6px}
+.kw span{font:800 13px var(--body);border-radius:8px;padding:4px 10px;background:var(--panel2);border:2px solid var(--line);color:var(--muted)}
+.kw span.hit{border-color:var(--green);color:var(--green);animation:pop .35s ease}
+.kw span.miss{border-color:var(--red);color:var(--red)}
+@keyframes pop{50%{transform:scale(1.2)}}
+
+/* ---------- OVERLAY ---------- */
+.overlay{position:fixed;inset:0;z-index:5;display:grid;place-items:center;background:rgba(8,5,22,.8);backdrop-filter:blur(5px);padding:16px}
+.overlay .box{max-width:560px;width:100%;max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:14px;animation:zoom .45s cubic-bezier(.2,1.4,.4,1) both}
+.overlay .box.center-text{text-align:center;align-items:center}
+@keyframes zoom{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+.overlay .bigstars{font-size:52px;letter-spacing:8px;color:var(--gold);text-shadow:0 0 20px rgba(255,210,63,.6)}
+.overlay h2{font-size:42px}
+.closex{align-self:flex-end;background:none;box-shadow:none;color:var(--muted);padding:4px 8px;font-size:22px}
+
+/* ---------- FINAL ---------- */
+.final{flex:1;display:grid;grid-template-columns:.9fr 1.1fr;gap:24px;width:100%;max-width:1500px;margin:0 auto;align-items:start}
+.final-hero{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.final-score{font:700 clamp(80px,11vw,150px) var(--display);line-height:.9;color:var(--gold);text-shadow:0 0 40px rgba(255,210,63,.45);font-variant-numeric:tabular-nums}
+.code{font:700 30px var(--display);letter-spacing:.2em;background:var(--panel2);border:2px dashed var(--gold);border-radius:14px;padding:8px 18px;color:var(--gold)}
+.rsum{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.rsum div{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.rsum b{display:block;font:700 26px var(--display)}
+.recap{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.recap figure{margin:0;display:flex;flex-direction:column;gap:6px;font-weight:800;font-size:13px}
+.recap .pair{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.recap img,.recap .ph{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:#0a0720}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}
+th{font:800 12px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+tr.me td{color:var(--gold);font-weight:800}
+.tablewrap{overflow-x:auto}
+.verify{display:flex;gap:8px;flex-wrap:wrap}
+.verify input{flex:1 1 110px;min-width:0;font:700 15px var(--body);padding:10px;border-radius:10px;border:2px solid var(--line);background:var(--panel2);color:var(--fg)}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:6}
+
+@media (max-width:1100px){
+  .home-grid{grid-template-columns:1fr 1.4fr}
+  .home-grid .showcase{display:none}
+}
+@media (max-width:1000px){
+  .home-grid,.final{grid-template-columns:1fr}
+  .home-bot{padding-top:60px}
+
+  .battle-grid{grid-template-columns:1fr}
+  .screen.fit{height:auto;overflow:visible}
+  .frame{width:100%}
+  .levels{grid-template-columns:1fr}
+  .lvl{min-height:0}
+  .steps{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  .logo{font-size:52px}
+  .buddy-top .bubble{white-space:normal;width:180px;text-align:center}
+  .frames{grid-template-columns:1fr 1fr}.vs{display:none}
+  .hud{grid-template-columns:1fr}.hud .who{text-align:left}.hud .right{justify-content:flex-start}
+  .entry{grid-template-columns:1fr}
+  .rung{grid-template-columns:54px 1fr}.rung .mult{grid-column:2;text-align:left}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="bg" aria-hidden="true"></canvas>
+<div class="glow"></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+<div id="root"></div>
+
+<!-- ========== TEMPLATES ========== -->
+<template id="tHome">
+  <section class="screen">
+    <div class="topbar">
+      <span class="sp"></span>
+      <button class="ghost iconbtn" id="boardBtn" type="button">🏆 Leaderboard</button>
+      <button class="ghost iconbtn" id="teacherBtn" type="button">👩‍🏫 Teacher</button>
+      <button class="ghost iconbtn soundBtn" type="button" aria-label="Sound on or off">🔊</button>
+    </div>
+    <div class="home-grid">
+      <div class="home-bot" id="homeBuddy"></div>
+      <div class="home-center">
+        <div class="school">Ignite School</div>
+        <span class="badge" style="margin:8px 0 14px">⚡ AI Competition 2026</span>
+        <h1 class="logo"><span class="a">Prompt</span> <span class="b">Battle</span></h1>
+        <p class="tag">See the picture. Write the perfect prompt. Let the AI draw it!</p>
+        <div id="resumeBox" hidden></div>
+        <form class="entry" id="joinForm">
+          <div class="label" style="grid-column:1/-1">Enter your details</div>
+          <input id="teamName" maxlength="28" placeholder="Your name" autocomplete="off" required aria-label="Your name">
+          <input id="schoolName" maxlength="50" placeholder="School name" autocomplete="off" aria-label="School name">
+          <select id="clsSel" required aria-label="Class">
+            <option value="">Class</option><option>Class 5</option><option>Class 6</option><option>Class 7</option><option>Class 8</option>
+          </select>
+          <button class="big" type="submit">Start Battle ▶</button>
+        </form>
+      </div>
+      <div class="showcase" aria-hidden="true">
+        <div class="art-card c1"><div class="art a1"></div><span>🎯 Target</span></div>
+        <div class="vs-badge">VS</div>
+        <div class="art-card c2"><div class="art a2"><i class="scan"></i></div><span>🤖 AI is drawing…</span></div>
+        <div class="spark s1">✦</div><div class="spark s2">✦</div><div class="spark s3">✦</div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<template id="tMap">
+  <section class="screen">
+    <div class="topbar">
+      <span class="badge" id="mWho"></span>
+      <span class="sp"></span>
+      <div class="scorechip"><small>SCORE</small><span id="mScore">0</span></div>
+      <button class="ghost iconbtn soundBtn" type="button" aria-label="Sound on or off">🔊</button>
+    </div>
+    <div class="map">
+      <div class="map-head"><div id="mapBuddy"></div><h2 id="mTitle">Choose your path</h2></div>
+      <div class="levels" id="levels"></div>
+      <div class="center"><button class="big" id="playBtn" type="button">Play</button></div>
+    </div>
+  </section>
+</template>
+
+<template id="tBattle">
+  <section class="screen fit">
+    <div class="hud">
+      <div class="left">
+        <span class="roundtag" id="bRound"></span>
+        <div><div class="label" id="bPic"></div><div class="pdots" id="pdots"></div></div>
+      </div>
+      <div class="who"><span class="label" id="bCls"></span><b id="bTeam"></b></div>
+      <div class="right"><div class="scorechip"><small>SCORE</small><span id="bScore">0</span></div></div>
+    </div>
+    <div class="battle-grid">
+      <div class="frames">
+        <div class="card"><div class="label">🎯 Target picture</div>
+          <div class="frame target"><img id="targetImg" alt="Target picture" hidden><div class="msg" id="targetMsg"></div></div></div>
+        <div class="vs">VS</div>
+        <div class="card"><div class="label">🤖 Your AI picture</div>
+          <div class="frame mine"><img id="mineImg" alt="Picture made from your prompt" hidden><div class="msg" id="mineMsg"><div><span class="q">?</span>Your picture appears here</div></div></div></div>
+      </div>
+      <aside class="panel side">
+        <div id="batBuddy"></div>
+        <label class="label" for="prompt">Your final prompt</label>
+        <textarea id="prompt" maxlength="300" placeholder="Describe everything you see: objects, colors, place, time, weather, style…"></textarea>
+        <div class="row countrow"><span class="count"><span id="chars">0</span>/300</span><span class="count">One prompt only</span></div>
+        <div class="note hint" id="hintBox" hidden></div>
+        <div class="note warn" id="warnBox" hidden></div>
+        <div class="row" id="actions">
+          <button class="ghost" id="hintBtn" type="button">💡 Hint (−10)</button>
+          <button class="pink" id="genBtn" type="button" style="flex:1">✨ Submit prompt</button>
+        </div>
+        <div class="result" id="result" hidden>
+          <div class="label">Picture score</div>
+          <div class="scoreline"><div class="total"><span id="rScore">0</span> <small>/ <span id="rMax">100</span></small></div><div class="stars" id="rStars">☆☆☆</div></div>
+          <div class="break" id="breakdown"></div>
+          <div class="label">What the judge looked for</div>
+          <div class="kw" id="kw"></div>
+          <button class="big" id="nextBtn" type="button">Next picture →</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+</template>
+
+<template id="tFinal">
+  <section class="screen">
+    <div class="topbar">
+      <span class="badge">🏆 Battle complete</span><span class="sp"></span>
+      <button class="ghost iconbtn soundBtn" type="button" aria-label="Sound on or off">🔊</button>
+    </div>
+    <div class="final">
+      <div class="final-hero">
+        <div id="finBuddy" style="width:100%"></div>
+        <h1 style="font-size:clamp(40px,5vw,72px)" id="fTeam"></h1>
+        <div class="label" id="fWho"></div>
+        <div class="final-score" id="fScore">0</div>
+        <p class="tag" id="fSub" style="margin:0"></p>
+        <div class="stars" id="fStars" style="font-size:38px"></div>
+        <div class="rsum" id="rsum"></div>
+        <div class="label" style="margin-top:6px">Result code: show this to the judge</div>
+        <div class="code" id="fCode"></div>
+        <button class="big" id="homeBtn" type="button">Next player ▶</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div class="panel"><h2 style="font-size:22px;margin-bottom:12px">Your pictures (target · yours)</h2><div class="recap" id="recap"></div></div>
+        <div class="panel"><h2 style="font-size:22px;margin-bottom:10px">Leaderboard (this computer)</h2><div class="tablewrap" id="fBoard"></div></div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script>
+/* ================== TEACHER SETTINGS (edit here) ================== */
+const SETTINGS = {
+  hintCost: 10,             // points lost for using a hint
+  secretSalt: "ignite-2026" // change this before the event (used for result codes)
+};
+const LEVELS = [
+  { name:"Rookie",  mult:1,   color:"l1", about:"One main thing with a few details." },
+  { name:"Pro",     mult:1.5, color:"l2", about:"Scenes with action, weather and style." },
+  { name:"Master",  mult:2,   color:"l3", about:"Busy scenes with mood, light and art style." }
+];
+/* ref = hidden prompt used to draw the target. img = optional own image file (e.g. "images/1.jpg").
+   groups = details the judge looks for (any word in a group counts), w = weight. */
+const PICTURES = [
+ // Round 1 (3 pictures)
+ {level:0, seed:4101, ref:"an orange cat wearing round glasses reading a book on a wooden table next to a lamp, cozy room, cartoon style",
+  hint:"Animal + what it wears + what it is doing + style",
+  groups:[{w:3,k:["cat","kitten","kitty"]},{w:2,k:["orange","ginger"]},{w:2,k:["glasses","spectacles","specs"]},{w:2,k:["book","reading","reads"]},{w:1,k:["table","desk","wooden","wood"]},{w:1,k:["lamp","light"]},{w:1,k:["cartoon","animated","illustration"]}]},
+ {level:0, seed:4202, ref:"a red hot air balloon flying over green mountains and a river at sunrise, soft clouds, photo",
+  hint:"What is flying + its color + what is below + time of day",
+  groups:[{w:3,k:["balloon","hot air balloon"]},{w:2,k:["red"]},{w:2,k:["mountain","hill"]},{w:1,k:["green"]},{w:1,k:["river","lake","water"]},{w:2,k:["sunrise","sunset","morning","dawn","sun"]},{w:1,k:["cloud","sky"]}]},
+ {level:0, seed:4303, ref:"a yellow school bus parked under a big tree full of pink flowers on a sunny day, cartoon style",
+  hint:"Vehicle + color + what is above it + weather",
+  groups:[{w:3,k:["bus","school bus"]},{w:2,k:["yellow"]},{w:2,k:["tree"]},{w:2,k:["pink"]},{w:1,k:["flower","blossom","cherry"]},{w:1,k:["sunny","sun","bright","day"]},{w:1,k:["cartoon","animated","illustration"]}]},
+ // Round 2 (4 pictures)
+ {level:1, seed:4404, ref:"a small cute robot watering colorful flowers in a garden with a watering can, light rain and grey clouds, 3D render",
+  hint:"Who + action + tool + weather + style (3D?)",
+  groups:[{w:3,k:["robot","bot"]},{w:2,k:["watering","water","waters"]},{w:2,k:["flower","plant"]},{w:1,k:["garden","park"]},{w:1,k:["watering can","can"]},{w:2,k:["rain","raining","rainy","cloud","cloudy"]},{w:1,k:["3d","render","pixar","toy"]}]},
+ {level:1, seed:4505, ref:"a lighthouse on a rocky cliff at night with a big full moon and crashing waves, watercolor painting",
+  hint:"Building + where it stands + time + sky + sea + painting style",
+  groups:[{w:3,k:["lighthouse","light house","tower"]},{w:2,k:["cliff","rock","rocky"]},{w:2,k:["night","dark"]},{w:2,k:["moon","full moon"]},{w:2,k:["wave","sea","ocean"]},{w:2,k:["watercolor","watercolour","painting","painted"]}]},
+ {level:1, seed:5010, ref:"a little girl flying a big kite shaped like a fish on a windy green hill, autumn trees with orange leaves, anime style",
+  hint:"Who + what she is flying + its shape + place + season + style",
+  groups:[{w:2,k:["girl","child","kid"]},{w:3,k:["kite"]},{w:2,k:["fish"]},{w:1,k:["hill","grass","field"]},{w:1,k:["wind","windy"]},{w:2,k:["autumn","fall","orange","leaves","leaf"]},{w:2,k:["anime","manga","cartoon"]}]},
+ {level:1, seed:4606, ref:"a polar bear eating an ice cream cone on a sunny beach with palm trees, pixel art",
+  hint:"Animal + what it eats + place + trees + game-style art",
+  groups:[{w:3,k:["polar bear","bear"]},{w:1,k:["white"]},{w:2,k:["ice cream","icecream","cone"]},{w:2,k:["beach","sand","sea","ocean"]},{w:2,k:["palm","palm tree","coconut"]},{w:1,k:["sunny","sun","summer"]},{w:2,k:["pixel","pixel art","8-bit","8 bit","retro"]}]},
+ // Round 3 (5 pictures)
+ {level:2, seed:4707, ref:"an astronaut riding a camel through a sandy desert under a purple starry sky with a big planet, digital art",
+  hint:"Who + riding what + where + sky colors + something in space",
+  groups:[{w:3,k:["astronaut","spaceman","space man"]},{w:3,k:["camel"]},{w:1,k:["riding","rides","ride"]},{w:2,k:["desert","sand","sandy","dune"]},{w:2,k:["star","starry"]},{w:2,k:["purple","violet"]},{w:1,k:["planet","saturn","moon"]},{w:1,k:["digital","art"]}]},
+ {level:2, seed:4808, ref:"a colorful auto rickshaw on a wet rainy city street in the evening, glowing shop lights and reflections on the road, cinematic",
+  hint:"Vehicle + weather + place + time + lights + camera look",
+  groups:[{w:3,k:["rickshaw","auto rickshaw","tuk tuk","tuk-tuk"]},{w:1,k:["colorful","colourful","yellow","green"]},{w:2,k:["rain","rainy","wet"]},{w:2,k:["street","road","city","bazaar","market"]},{w:2,k:["evening","night","dusk"]},{w:2,k:["light","glowing","neon","shop"]},{w:1,k:["reflection","puddle"]},{w:1,k:["cinematic","photo","realistic"]}]},
+ {level:2, seed:4909, ref:"a giant teacup used as a boat floating on a calm lake with ducks swimming around it, early morning fog, oil painting",
+  hint:"Strange boat + where + animals + weather + painting type",
+  groups:[{w:3,k:["teacup","tea cup","cup","mug"]},{w:2,k:["boat","floating","float","sailing"]},{w:2,k:["lake","pond","river","water"]},{w:2,k:["duck","duckling"]},{w:2,k:["fog","foggy","mist","misty"]},{w:1,k:["morning","dawn","sunrise"]},{w:2,k:["oil painting","oil","painting","painted"]}]}
+,
+ {level:2, seed:5111, ref:"a cozy treehouse library glowing at night with fireflies, a wooden ladder and an owl sitting on a branch, fantasy illustration",
+  hint:"Where + what is inside + time + tiny lights + bird + style",
+  groups:[{w:3,k:["treehouse","tree house"]},{w:2,k:["library","book","bookshelf"]},{w:2,k:["night","dark"]},{w:1,k:["glowing","glow","lights","lantern"]},{w:2,k:["firefly","fireflies"]},{w:1,k:["ladder"]},{w:2,k:["owl"]},{w:1,k:["fantasy","illustration","magical"]}]},
+ {level:2, seed:5212, ref:"a vintage red train crossing an old stone bridge over a waterfall in snowy mountains, golden hour light, realistic photo",
+  hint:"Vehicle + what it crosses + water + weather + mountains + light",
+  groups:[{w:3,k:["train"]},{w:1,k:["red","vintage","old"]},{w:2,k:["bridge","stone bridge"]},{w:2,k:["waterfall"]},{w:2,k:["snow","snowy","winter"]},{w:1,k:["mountain"]},{w:1,k:["golden hour","sunset","evening","golden"]},{w:1,k:["photo","realistic","photograph"]}]}
+];
+const BLOCKED = ["kill","blood","gun","knife","bomb","weapon","dead","naked","nude","sexy","kiss","drug","alcohol","beer","smoke","cigarette","horror","zombie"];
+/* ================================================================= */
+
+const $ = id => document.getElementById(id);
+const root = $("root");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const LS = {
+  get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+function mount(id){ root.innerHTML = ""; root.appendChild($(id).content.cloneNode(true)); window.scrollTo(0,0); wireSound(); }
+const levelPics = L => PICTURES.map((p,i)=>({...p,i})).filter(p=>p.level===L);
+const maxFor = p => Math.round(100 * LEVELS[p.level].mult);
+const MAX_TOTAL = PICTURES.reduce((a,p)=>a+maxFor(p),0);
+const roundMax = li => levelPics(li).reduce((a,p)=>a+maxFor(p),0);
+const starsFor = pct => pct>=80?3:pct>=55?2:pct>=30?1:0;
+const starStr = n => "★".repeat(n) + "☆".repeat(3-n);
+
+/* ---------- SOUND ---------- */
+let soundOn = LS.get("pb-sound", true), actx = null;
+function beep(freqs, dur=.12, type="triangle", vol=.08){
+  if (!soundOn) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    let t = actx.currentTime;
+    freqs.forEach(f=>{ const o=actx.createOscillator(), g=actx.createGain(); o.type=type; o.frequency.value=f;
+      g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.0001,t+dur); o.connect(g).connect(actx.destination); o.start(t); o.stop(t+dur); t+=dur*.8; });
+  }catch(e){}
+}
+const SFX = { click:()=>beep([660],.06), good:()=>beep([523,659,784],.12), great:()=>beep([523,659,784,1047],.14),
+              level:()=>beep([392,523,659,784,1047],.16), bad:()=>beep([220,180],.15,"sawtooth",.05) };
+function wireSound(){ document.querySelectorAll(".soundBtn").forEach(b=>{ b.textContent = soundOn?"🔊":"🔇";
+  b.onclick = ()=>{ soundOn=!soundOn; LS.set("pb-sound",soundOn); wireSound(); SFX.click(); }; }); }
+
+/* ---------- IMAGE ENGINE ----------
+   Online (Vercel): api/image keeps the API key secret on the server.
+   Opened as a file: falls back to the free public service (slow). */
+let useServer = location.protocol !== "file:";
+const memCache = {};
+let lastReq = 0, chain = Promise.resolve();
+function imgUrl(prompt, seed){
+  const p = encodeURIComponent(prompt);
+  return useServer ? `api/image?prompt=${p}&seed=${seed}`
+                   : `https://image.pollinations.ai/prompt/${p}?width=512&height=512&seed=${seed}&nologo=true&safe=true`;
+}
+const keyOf = (prompt,seed) => seed + "|" + prompt;
+function cacheGet(k){ if (memCache[k]) return memCache[k]; try{ const v = localStorage.getItem("pb-img-"+k); if (v) memCache[k]=v; return v; }catch(e){ return null; } }
+function cacheSet(k,v,keep){ memCache[k]=v; if (keep) try{ localStorage.setItem("pb-img-"+k, v); }catch(e){} }
+const toDataUrl = b => new Promise((ok,no)=>{ const fr=new FileReader(); fr.onload=()=>ok(fr.result); fr.onerror=no; fr.readAsDataURL(b); });
+
+function getImage(prompt, seed, keep, onWait){
+  const k = keyOf(prompt,seed), hit = cacheGet(k);
+  if (hit) return Promise.resolve(hit);
+  const job = chain.then(async ()=>{
+    for (let attempt=0; attempt<6; attempt++){
+      const gap = useServer ? 0 : 6000, wait = lastReq + gap - Date.now();
+      if (wait > 0){ onWait && onWait(Math.ceil(wait/1000)); await sleep(wait); }
+      lastReq = Date.now();
+      try{
+        const ac = new AbortController(), to = setTimeout(()=>ac.abort(), 60000);
+        const res = await fetch(imgUrl(prompt, seed), { signal: ac.signal }); clearTimeout(to);
+        if (useServer && res.status === 404){ useServer = false; continue; }
+        const type = res.headers.get("content-type") || "";
+        if (res.ok && type.startsWith("image")){ const d = await toDataUrl(await res.blob()); cacheSet(k,d,keep); return d; }
+      }catch(e){}
+      onWait && onWait(8); await sleep(8000);
+    }
+    throw new Error("busy");
+  });
+  chain = useServer ? Promise.resolve() : job.catch(()=>{});
+  return job;
+}
+let tokenSeq = 0;
+function showImage(img, msg, pic, prompt, keep, loadingText){
+  const tok = String(++tokenSeq); img.dataset.tok = tok;
+  img.hidden = true; msg.hidden = false; msg.innerHTML = `<div><div class="spin"></div>${loadingText}</div>`;
+  if (pic && pic.img && keep){ img.src = pic.img; img.onload=()=>{ img.hidden=false; msg.hidden=true; }; return Promise.resolve(pic.img); }
+  return getImage(prompt, pic.seed, keep, s=>{ if (img.dataset.tok===tok) msg.innerHTML = `<div><div class="spin"></div>AI is busy… ${s}s</div>`; })
+    .then(d=>{ if (img.dataset.tok!==tok) return d; img.src=d; img.hidden=false; msg.hidden=true; return d; })
+    .catch(()=>{ if (img.dataset.tok!==tok) return;
+      msg.innerHTML = `<div>AI could not draw right now.<br><button type="button" class="ghost" style="margin-top:10px">Try again</button></div>`;
+      msg.querySelector("button").onclick = ()=>showImage(img,msg,pic,prompt,keep,loadingText); });
+}
+
+/* ---------- SCORING (one final prompt per picture) ---------- */
+function judge(text, groups){
+  const t = " " + text.toLowerCase().replace(/[^a-z0-9\s-]/g," ").replace(/\s+/g," ") + " ";
+  let got=0,total=0; const hits=[];
+  groups.forEach((g,i)=>{ total+=g.w;
+    if (g.k.some(k => new RegExp("(^|[^a-z])" + reEsc(k) + "(s|es)?([^a-z]|$)").test(t))){ got+=g.w; hits.push(i); } });
+  return { pct: Math.round(got/total*100), hits };
+}
+function pointsFor(pic, pct, usedHint){
+  const L = LEVELS[pic.level];
+  const hint = usedHint ? -SETTINGS.hintCost : 0;
+  return { accuracy:pct, hint, mult:L.mult, total: Math.round(Math.max(0, pct + hint) * L.mult), stars: starsFor(pct) };
+}
+function resultCode(team, score){
+  let h = 5381; const s = team.trim().toLowerCase() + "|" + score + "|" + SETTINGS.secretSalt;
+  for (let i=0;i<s.length;i++) h = ((h<<5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(36).toUpperCase().slice(-6).padStart(6,"0");
+}
+
+/* ---------- GAME STATE ---------- */
+let G = null;
+function save(){ if (G) LS.set("pb-game", G); }
+const totalScore = () => G.results.reduce((a,r)=>a+(r?r.total:0),0);
+const levelOf = i => PICTURES[i].level;
+const roundScores = () => LEVELS.map((_,li)=>levelPics(li).reduce((a,p)=>a+(G.results[p.i]?G.results[p.i].total:0),0));
+function newId(){ return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,10); }
+function newGame(team, cls, school){
+  G = { team, cls:cls||"", school:school||"", id:newId(), at:Date.now(), picIndex:0, results:PICTURES.map(()=>null), started:Date.now() };
+  save(); sync("playing"); showMap();
+}
+/* send progress to the teacher dashboard (only on the live website) */
+function sync(status){
+  if (!G || location.protocol === "file:") return;
+  if (!G.id) G.id = newId();
+  const total = totalScore();
+  const body = { id:G.id, name:G.team, cls:G.cls, school:G.school, rounds:roundScores(), total,
+    pictures:G.results.filter(Boolean).length, totalPictures:PICTURES.length,
+    stars:G.results.reduce((a,r)=>a+(r?r.stars:0),0), status, started:G.started,
+    secs:Math.round((Date.now()-G.started)/1000), code: status==="finished" ? resultCode(G.team,total) : "" };
+  const send = n => fetch("api/score",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),keepalive:true})
+    .then(r=>{ if(!r.ok && r.status>=500 && r.status!==503 && n<2) setTimeout(()=>send(n+1),3000); })
+    .catch(()=>{ if(n<2) setTimeout(()=>send(n+1),3000); });
+  send(0);
+}
+
+/* ---------- OVERLAY helper ---------- */
+function overlay(html, cls=""){
+  const ov = document.createElement("div"); ov.className = "overlay";
+  ov.innerHTML = `<div class="panel box ${cls}">${html}</div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if (e.target===ov && !cls.includes("sticky")) ov.remove(); });
+  const x = ov.querySelector(".closex"); if (x) x.onclick = ()=>ov.remove();
+  return ov;
+}
+
+/* ---------- HOME ---------- */
+function showHome(){
+  mount("tHome");
+  const saved = LS.get("pb-game", null);
+  if (saved && saved.picIndex < PICTURES.length){
+    $("resumeBox").hidden = false;
+    $("resumeBox").innerHTML = `<div class="panel row" style="gap:14px;margin-top:20px;padding:14px 18px"><span>Unfinished game for <b>${esc(saved.team)}</b> (picture ${saved.picIndex+1} of ${PICTURES.length})</span><span class="row" style="gap:8px"><button class="cyan" id="resumeBtn" type="button">Continue</button><button class="ghost" id="dropBtn" type="button">Discard</button></span></div>`;
+    $("resumeBtn").onclick = ()=>{ G = saved; if (!G.id) G.id = newId(); sync("playing"); showMap(); };
+    $("dropBtn").onclick = ()=>{ LS.del("pb-game"); showHome(); };
+  }
+  $("joinForm").onsubmit = e=>{ e.preventDefault(); const t=$("teamName").value.trim(); if(!t || !$("clsSel").value) return; SFX.click(); newGame(t, $("clsSel").value, $("schoolName").value.trim()); };
+  $("boardBtn").onclick = ()=>{ const ov = overlay(`<button class="closex" type="button" aria-label="Close">✕</button><h2 style="font-size:30px">🏆 Leaderboard</h2><p class="label">This computer</p><div class="tablewrap" id="ovBoard"></div>`); renderBoard(ov.querySelector("#ovBoard")); };
+  $("teacherBtn").onclick = openTeacher;
+  startMascot();
+  $("teamName").focus();
+}
+/* ---------- BUDDY: Pixel, the helper robot ---------- */
+function botSVG(u){ return `
+<svg viewBox="0 0 240 300" aria-hidden="true">
+ <defs>
+  <linearGradient id="mt${u}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#dde2ef"/><stop offset="1" stop-color="#a3abc6"/></linearGradient>
+  <linearGradient id="gm${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#666b88"/><stop offset="1" stop-color="#2a2d44"/></linearGradient>
+  <linearGradient id="vz${u}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2160"/><stop offset="1" stop-color="#05030f"/></linearGradient>
+  <radialGradient id="th${u}"><stop offset="0" stop-color="#ffffff"/><stop offset=".35" stop-color="#3fe0ff"/><stop offset="1" stop-color="#3fe0ff" stop-opacity="0"/></radialGradient>
+  <filter id="gl${u}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+ </defs>
+ <ellipse class="shadow" cx="120" cy="292" rx="50" ry="7" fill="#000" opacity=".45"/>
+ <g class="bot">
+  <ellipse class="thrust" cx="120" cy="266" rx="32" ry="15" fill="url(#th${u})"/>
+  <path d="M88 232 H152 L145 254 Q143 260 136 260 H104 Q97 260 95 254 Z" fill="url(#gm${u})"/>
+  <rect x="100" y="252" width="40" height="4" rx="2" fill="#3fe0ff" filter="url(#gl${u})"/>
+  <line x1="64" y1="162" x2="52" y2="196" stroke="url(#mt${u})" stroke-width="17" stroke-linecap="round"/>
+  <line x1="52" y1="196" x2="56" y2="226" stroke="url(#mt${u})" stroke-width="15" stroke-linecap="round"/>
+  <circle cx="52" cy="196" r="7" fill="url(#gm${u})"/>
+  <circle cx="57" cy="232" r="9" fill="url(#gm${u})"/>
+  <path d="M50 238 q7 7 14 0" stroke="#3fe0ff" stroke-width="3" fill="none" stroke-linecap="round" filter="url(#gl${u})"/>
+  <circle cx="64" cy="160" r="13" fill="url(#gm${u})"/>
+  <g class="wave">
+   <line x1="178" y1="160" x2="198" y2="128" stroke="url(#mt${u})" stroke-width="17" stroke-linecap="round"/>
+   <line x1="198" y1="128" x2="204" y2="96" stroke="url(#mt${u})" stroke-width="15" stroke-linecap="round"/>
+   <circle cx="198" cy="128" r="7" fill="url(#gm${u})"/>
+   <circle cx="205" cy="88" r="10" fill="url(#gm${u})"/>
+   <path d="M197 82 l-3 -8 M205 79 l0 -9 M213 82 l3 -8" stroke="#3fe0ff" stroke-width="3" stroke-linecap="round" filter="url(#gl${u})"/>
+   <circle cx="176" cy="160" r="13" fill="url(#gm${u})"/>
+  </g>
+  <path d="M72 150 Q72 142 82 142 H158 Q168 142 168 150 L161 226 Q159 236 149 236 H91 Q81 236 79 226 Z" fill="url(#mt${u})"/>
+  <path d="M84 156 H156 M80 214 H160" stroke="#a7afc9" stroke-width="1.4" fill="none"/>
+  <path d="M120 142 V164" stroke="#a7afc9" stroke-width="1.4"/>
+  <rect x="91" y="164" width="58" height="42" rx="11" fill="url(#vz${u})" stroke="#4a4f6e" stroke-width="2"/>
+  <text x="120" y="196" text-anchor="middle" font-family="Fredoka, Trebuchet MS, sans-serif" font-weight="700" font-size="27" fill="#ffd23f" filter="url(#gl${u})">AI</text>
+  <circle class="led" cx="104" cy="223" r="3" fill="#41e39a"/><circle class="led" cx="114" cy="223" r="3" fill="#ff4fa3"/><circle class="led" cx="124" cy="223" r="3" fill="#ffd23f"/>
+  <rect x="136" y="220" width="18" height="6" rx="3" fill="#a7afc9"/>
+  <rect x="106" y="128" width="28" height="16" rx="5" fill="url(#gm${u})"/>
+  <path d="M106 134 H134 M106 139 H134" stroke="#3b3f5a" stroke-width="1.5"/>
+  <line x1="120" y1="36" x2="120" y2="16" stroke="url(#gm${u})" stroke-width="4" stroke-linecap="round"/>
+  <circle class="ant" cx="120" cy="12" r="6" fill="#ff4fa3" filter="url(#gl${u})"/>
+  <circle cx="51" cy="84" r="15" fill="url(#gm${u})"/><circle cx="51" cy="84" r="8" fill="none" stroke="#3fe0ff" stroke-width="2.5" filter="url(#gl${u})"/>
+  <circle cx="189" cy="84" r="15" fill="url(#gm${u})"/><circle cx="189" cy="84" r="8" fill="none" stroke="#3fe0ff" stroke-width="2.5" filter="url(#gl${u})"/>
+  <rect x="54" y="32" width="132" height="102" rx="40" fill="url(#mt${u})"/>
+  <path d="M80 40 Q120 28 160 40" stroke="#b9c0d6" stroke-width="2" fill="none"/>
+  <rect x="65" y="52" width="110" height="64" rx="27" fill="url(#vz${u})" stroke="#4a4f6e" stroke-width="2"/>
+  <path d="M76 61 Q102 52 136 55 L127 63 Q100 61 82 69 Z" fill="#fff" opacity=".16"/>
+  <g class="eyes" filter="url(#gl${u})">
+   <rect class="eye" x="86" y="74" width="24" height="12" rx="6" fill="#3fe0ff"/>
+   <rect class="eye" x="130" y="74" width="24" height="12" rx="6" fill="#3fe0ff"/>
+  </g>
+  <g class="happy" filter="url(#gl${u})" stroke="#3fe0ff" stroke-width="5" fill="none" stroke-linecap="round">
+   <path d="M87 86 q11 -13 22 0"/><path d="M131 86 q11 -13 22 0"/>
+  </g>
+  <g class="grille" fill="#3fe0ff" filter="url(#gl${u})">
+   <rect class="gb" x="104" y="97" width="4" height="7" rx="2"/><rect class="gb" x="111" y="97" width="4" height="7" rx="2"/><rect class="gb" x="118" y="97" width="4" height="7" rx="2"/><rect class="gb" x="125" y="97" width="4" height="7" rx="2"/><rect class="gb" x="132" y="97" width="4" height="7" rx="2"/>
+  </g>
+ </g>
+</svg>`; }
+const buddyTimers = {};
+function putBuddy(slotId, u, layout, width){
+  const slot = $(slotId); if (!slot) return;
+  slot.innerHTML = `<div class="buddy buddy-${layout}" id="buddy-${u}" role="img" aria-label="Pixel the AI robot">
+    <div class="bubble"><span class="bt" aria-live="polite"></span><span class="caret"></span></div>
+    <div class="buddy-bot" style="--bw:${width}">${botSVG(u)}</div></div>`;
+  const el = $("buddy-"+u);
+  el.onclick = ()=>{ el.classList.remove("jump"); void el.offsetWidth; el.classList.add("jump"); setTimeout(()=>el.classList.remove("jump"),750);
+    beep([784,988,1175],.09); say(u, pick(CHEERS)); };
+}
+const pick = a => a[Math.floor(Math.random()*a.length)];
+function say(u, text, opts={}){
+  const el = $("buddy-"+u); if (!el) return;
+  const bt = el.querySelector(".bt"), svg = el.querySelector("svg"), bub = el.querySelector(".bubble");
+  clearTimeout(buddyTimers[u]); bub.style.animation="none"; void bub.offsetWidth; bub.style.animation="";
+  el.classList.toggle("cheer", !!opts.cheer);
+  const chars = Array.from(text); let i = 0; svg.classList.add("talking");
+  const type = ()=>{ if (!document.body.contains(bt)) return;
+    bt.textContent = chars.slice(0, ++i).join("");
+    if (i < chars.length) buddyTimers[u] = setTimeout(type, 34);
+    else { svg.classList.remove("talking"); if (opts.then) buddyTimers[u] = setTimeout(opts.then, opts.wait || 2600); } };
+  type();
+}
+const CHEERS = ["Beep boop! You've got this! 💪","Every detail counts! 🔍","I believe in you! ⭐","Let's make some AI magic! ✨"];
+const GREETINGS = ["Welcome to Prompt Battle! 👋", "Hi! I'm Pixel, your AI buddy 🤖", "You describe it, I draw it! 🎨", "Type your name to begin ✨"];
+let lineNo = 0;
+function homeLine(){
+  const n = $("teamName") && $("teamName").value.trim();
+  say("h", n ? `Hi ${n.split(" ")[0]}! Ready to battle? 🚀` : GREETINGS[lineNo++ % GREETINGS.length], { then: homeLine });
+}
+function startMascot(){
+  putBuddy("homeBuddy", "h", "top", innerWidth > 1000 ? "min(100%, 460px, calc(62vh * .8))" : "170px");
+  lineNo = 0; homeLine();
+  let t = null;
+  $("teamName").addEventListener("input", ()=>{ clearTimeout(t); t = setTimeout(()=>{ if ($("teamName") && $("teamName").value.trim()) homeLine(); }, 500); });
+}
+const ROUND_PEP = [
+  n => `Let's go, ${n}! Look at every tiny detail 🔍`,
+  n => `Super, ${n}! Round 2 has bigger scenes. Think weather and style! 💪`,
+  n => `Final round, ${n}! Master prompts win big ⭐`
+];
+const TIPS = ["Tip: name the colors you see 🎨","Tip: say where it is and the time of day 🌅","Tip: add the art style (cartoon, photo, painting) 🖌️","Tip: what is it doing? Add the action! 🏃","Tip: one prompt only, so check it before you submit ✅"];
+function scoreLine(stars){
+  return stars>=3 ? pick(["WOW! Perfect prompt! 🏆","Amazing! You're a prompt master! 🌟"])
+       : stars===2 ? pick(["Great job! Almost perfect 👏","So close! Brilliant work 💫"])
+       : stars===1 ? pick(["Nice try! Add more details next time 💡","Good start! Colors and style help a lot 🎨"])
+       : pick(["Don't worry, the next one is yours! 💪","Keep going! Look closer next time 🔍"]);
+}
+function openTeacher(){
+  const ov = overlay(`<button class="closex" type="button" aria-label="Close">✕</button>
+    <h2 style="font-size:30px">Teacher tools</h2>
+    <div class="row"><p style="color:var(--muted)">Live scores of every player.</p><a href="dashboard.html" target="_blank"><button class="cyan" type="button" tabindex="-1">Open dashboard</button></a></div>
+    <div class="row"><p style="color:var(--muted)">Load all ${PICTURES.length} target pictures before the event.</p><button class="cyan" id="prepBtn" type="button">Prepare pictures</button></div>
+    <div><p style="color:var(--muted);margin-bottom:8px">Check a player's result code:</p>
+      <form class="verify" id="verifyForm"><input id="vTeam" placeholder="Name" required><input id="vScore" placeholder="Score" inputmode="numeric" required><input id="vCode" placeholder="Code" required><button type="submit">Check</button></form>
+      <p id="vOut" style="margin-top:8px;font-weight:800"></p></div>
+    <div class="row"><p style="color:var(--muted)">Clear this computer's leaderboard.</p><button class="ghost" id="clearBtn" type="button">Clear</button></div>`);
+  if (PICTURES.every(p => p.img || cacheGet(keyOf(p.ref,p.seed)))) ov.querySelector("#prepBtn").textContent = "✓ All pictures ready";
+  ov.querySelector("#prepBtn").onclick = e => prepareAll(e.target);
+  ov.querySelector("#clearBtn").onclick = e=>{ const b=e.target; if (b.dataset.sure){ LS.set("pb-board",[]); b.textContent="Cleared"; } else { b.dataset.sure="1"; b.textContent="Press again"; } };
+  ov.querySelector("#verifyForm").onsubmit = e=>{ e.preventDefault();
+    const ok = resultCode(ov.querySelector("#vTeam").value, ov.querySelector("#vScore").value.trim()) === ov.querySelector("#vCode").value.trim().toUpperCase();
+    const o = ov.querySelector("#vOut"); o.textContent = ok ? "✓ Code is valid" : "✗ Code does not match"; o.style.color = ok?"var(--green)":"var(--red)"; };
+}
+async function prepareAll(b){
+  b.disabled = true;
+  for (let i=0;i<PICTURES.length;i++){
+    const p = PICTURES[i]; if (p.img) continue;
+    b.textContent = `Preparing ${i+1} of ${PICTURES.length}…`;
+    try{ await getImage(p.ref, p.seed, true); }catch(e){ b.textContent = "AI busy. Press again"; b.disabled=false; return; }
+  }
+  b.textContent = "✓ All pictures ready";
+}
+function renderBoard(el, highlightAt){
+  const b = LS.get("pb-board",[]);
+  if (!b.length){ el.innerHTML = "<p style='color:var(--muted)'>No players yet.</p>"; return; }
+  el.innerHTML = `<table><thead><tr><th>#</th><th>Name</th><th>Class</th><th>Score</th><th>Stars</th></tr></thead><tbody>${
+    b.slice(0,20).map((e,i)=>`<tr class="${e.at===highlightAt?'me':''}"><td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td><td>${esc(e.team)}</td><td>${esc(e.cls||"")}</td><td>${e.score}</td><td>${e.stars}★</td></tr>`).join("")}</tbody></table>`;
+}
+
+/* ---------- ROUND MAP ---------- */
+function showMap(){
+  mount("tMap");
+  $("mWho").textContent = `${G.team}${G.cls ? " · " + G.cls : ""}`; $("mScore").textContent = totalScore();
+  const curLevel = G.picIndex < PICTURES.length ? levelOf(G.picIndex) : LEVELS.length-1;
+  $("mTitle").textContent = curLevel === 0 ? "Ready for Round 1?" : `Round ${curLevel+1} unlocked!`;
+  $("levels").innerHTML = LEVELS.map((L,li)=>{
+    const pics = levelPics(li), res = pics.map(p=>G.results[p.i]), n = pics.length;
+    const pts = res.reduce((a,r)=>a+(r?r.total:0),0);
+    const state = li < curLevel ? "done" : li === curLevel ? "current" : "locked";
+    return `<div class="lvl ${L.color} ${state}">
+      <div class="big">${li+1}</div><h3>${L.name}</h3><p>${L.about}</p>
+      <div class="stars">${state==="locked" ? "" : res.map(r=>starStr(r?r.stars:0)).join(" ")}</div>
+      <div class="meta"><span class="pill">${n} pictures</span><span class="pill">1 prompt each</span><span class="pill">×${L.mult} points</span>
+      ${state==="done" ? `<span class="pill" style="color:var(--green);border-color:var(--green)">✓ ${pts} points</span>` : ""}</div>
+    </div>`; }).join("");
+  putBuddy("mapBuddy", "m", "top", "130px");
+  say("m", ROUND_PEP[curLevel](G.team.split(" ")[0]), { cheer: curLevel>0 });
+  $("playBtn").textContent = `Play Round ${curLevel+1}: ${LEVELS[curLevel].name} ▶`;
+  $("playBtn").onclick = ()=>{ SFX.click(); showBattle(); };
+  $("playBtn").focus();
+}
+
+/* ---------- BATTLE ---------- */
+let R = null;
+function showBattle(){
+  mount("tBattle");
+  const pic = PICTURES[G.picIndex], L = LEVELS[pic.level], inLevel = levelPics(pic.level), pos = inLevel.findIndex(p=>p.i===G.picIndex);
+  R = { pic, hint:false, done:false, img:null, startedAt:Date.now() };
+  $("bTeam").textContent = G.team; $("bCls").textContent = G.cls || "Player"; $("bScore").textContent = totalScore();
+  $("bRound").textContent = `Round ${pic.level+1} · ${L.name}`; $("bRound").className = "roundtag " + L.color;
+  $("bPic").textContent = `Picture ${pos+1} of ${inLevel.length}`;
+  $("pdots").innerHTML = inLevel.map((p,j)=>`<i class="${j<pos?'done':j===pos?'now':''}"></i>`).join("");
+  $("rMax").textContent = maxFor(pic);
+  $("hintBox").textContent = "💡 " + pic.hint;
+  $("nextBtn").textContent = G.picIndex === PICTURES.length-1 ? "Finish battle 🏁" : (pos === inLevel.length-1 ? "Finish round →" : "Next picture →");
+  $("prompt").oninput = e=>{ $("chars").textContent = e.target.value.length; $("warnBox").hidden = true; };
+  $("prompt").onkeydown = e=>{ if (e.key==="Enter" && (e.ctrlKey||e.metaKey)) submit(); };
+  $("genBtn").onclick = submit;
+  $("hintBtn").onclick = ()=>{ R.hint=true; $("hintBox").hidden=false; $("hintBtn").disabled=true; SFX.click(); };
+  $("nextBtn").onclick = finishPicture;
+  showImage($("targetImg"), $("targetMsg"), pic, pic.ref, true, "Loading picture…");
+  putBuddy("batBuddy", "b", "side", "72px");
+  say("b", pos===0 ? `Round ${pic.level+1}, picture 1! ${pick(TIPS)}` : pick(TIPS));
+  $("prompt").focus();
+}
+function submit(){
+  if (R.done) return;
+  const text = $("prompt").value.trim();
+  const warn = m => { $("warnBox").textContent = m; $("warnBox").hidden = false; SFX.bad(); };
+  if (text.split(/\s+/).length < 3) return warn("Write at least 3 words.");
+  const low = " " + text.toLowerCase() + " ";
+  if (BLOCKED.some(w => new RegExp("[^a-z]" + w + "[^a-z]").test(low))) return warn("Please keep your prompt school-friendly.");
+  R.done = true; R.prompt = text; document.querySelector(".side").classList.add("submitted");
+  $("prompt").disabled = true; $("actions").hidden = true;
+  const j = judge(text, R.pic.groups), pts = pointsFor(R.pic, j.pct, R.hint);
+  R.pts = pts; R.hits = j.hits;
+  showImage($("mineImg"), $("mineMsg"), R.pic, text, false, "AI is drawing your picture…").then(d=>{ if (d && R && R.prompt===text) R.img = d; });
+  say("b", scoreLine(pts.stars), { cheer: pts.stars>=2 });
+  // score panel
+  $("result").hidden = false;
+  countUp($("rScore"), pts.total); $("rStars").textContent = starStr(pts.stars);
+  const row = (n,v,cls="") => `<div><span>${n}</span><span class="${cls}">${v}</span></div>`;
+  $("breakdown").innerHTML = row("Accuracy", `${pts.accuracy} / 100`) + (pts.hint?row("Hint", pts.hint, "neg"):"") + row("Round multiplier", `×${pts.mult}`) + row("<b>Picture score</b>", `<b>${pts.total}</b>`);
+  $("kw").innerHTML = R.pic.groups.map((g,i)=> j.hits.includes(i) ? `<span class="hit">✓ ${esc(g.k[0])}</span>` : `<span class="miss">✗ ${esc(g.k[0])}</span>`).join("");
+  countUp($("bScore"), totalScore() + pts.total);
+  pts.stars >= 3 ? (SFX.great(), confetti(70)) : pts.stars >= 1 ? SFX.good() : SFX.bad();
+  $("nextBtn").focus({preventScroll:true});
+}
+function countUp(el, to){
+  const from = +el.textContent || 0, t0 = performance.now();
+  const step = now => { const k = Math.min(1,(now-t0)/800); el.textContent = Math.round(from + (to-from)*(1-Math.pow(1-k,3))); if (k<1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function finishPicture(){
+  if (!R.done) return;
+  const pic = R.pic;
+  G.results[G.picIndex] = { total:R.pts.total, stars:R.pts.stars, prompt:R.prompt };
+  if (R.img) memCache["mine-"+G.picIndex] = R.img;
+  const wasLast = G.picIndex === PICTURES.length-1, levelDone = wasLast || levelOf(G.picIndex+1) !== pic.level;
+  G.picIndex++; save(); sync(G.picIndex >= PICTURES.length ? "finished" : "playing");
+  if (levelDone) roundComplete(pic.level, wasLast); else { SFX.click(); showBattle(); }
+}
+
+/* ---------- ROUND COMPLETE ---------- */
+function roundComplete(li, finalRound){
+  const pics = levelPics(li), res = pics.map(p=>G.results[p.i]);
+  const stars = res.reduce((a,r)=>a+(r?r.stars:0),0), pts = res.reduce((a,r)=>a+(r?r.total:0),0);
+  const avg = stars / pics.length;
+  const ov = overlay(`
+    <div id="ovBuddy"></div>
+    <span class="badge">Round ${li+1} complete</span>
+    <h2>${avg>=2.3?"Amazing!":avg>=1.3?"Great job!":"Good try!"}</h2>
+    <div class="bigstars">${starStr(Math.round(avg))}</div>
+    <p class="tag" style="margin:0">You scored <b style="color:var(--gold)">${pts}</b> of ${roundMax(li)} points in ${LEVELS[li].name}.</p>
+    ${finalRound ? "" : `<p style="color:var(--cyan);font-weight:800">🔓 Round ${li+2}: ${LEVELS[li+1].name} unlocked · ${levelPics(li+1).length} pictures · ×${LEVELS[li+1].mult} points</p>`}
+    <button class="big" id="ovBtn" type="button">${finalRound ? "See final score 🏆" : "Continue ▶"}</button>`, "center-text sticky");
+  putBuddy("ovBuddy", "o", "top", "120px");
+  say("o", finalRound ? "You finished all 3 rounds! 🎉" : pick(["Round cleared! Keep it up! 🚀","You're on fire! Next round! 🔥","Level up! I'm proud of you! 🌟"]), { cheer:true });
+  SFX.level(); confetti(stars*15+40);
+  ov.querySelector("#ovBtn").onclick = ()=>{ ov.remove(); finalRound ? showFinal() : showMap(); };
+  ov.querySelector("#ovBtn").focus();
+}
+
+/* ---------- FINAL ---------- */
+function showFinal(){
+  mount("tFinal");
+  const score = totalScore(), stars = G.results.reduce((a,r)=>a+(r?r.stars:0),0), secs = Math.round((Date.now()-G.started)/1000);
+  const code = resultCode(G.team, score);
+  if (!G.saved){
+    const b = LS.get("pb-board",[]); b.push({ team:G.team, cls:G.cls, score, stars, secs, at:G.at, code });
+    b.sort((a,c)=>c.score-a.score || a.secs-c.secs); LS.set("pb-board", b.slice(0,100)); G.saved = true;
+  }
+  $("fTeam").textContent = G.team; $("fWho").textContent = [G.cls, G.school].filter(Boolean).join(" · ");
+  countUp($("fScore"), score);
+  $("fSub").textContent = `out of ${MAX_TOTAL} points · ${stars} of ${PICTURES.length*3} stars`;
+  $("fStars").textContent = starStr(starsFor(Math.round(score/MAX_TOTAL*100)));
+  $("rsum").innerHTML = roundScores().map((s,li)=>`<div><span class="label">Round ${li+1}</span><b>${s}</b><span class="count">of ${roundMax(li)}</span></div>`).join("");
+  $("fCode").textContent = code;
+  $("recap").innerHTML = PICTURES.map((p,i)=>{
+    const t = p.img || cacheGet(keyOf(p.ref,p.seed)), m = memCache["mine-"+i], r = G.results[i];
+    return `<figure><div class="pair">${t?`<img src="${t}" alt="Target ${i+1}">`:'<div class="ph"></div>'}${m?`<img src="${m}" alt="Your picture ${i+1}">`:'<div class="ph"></div>'}</div>
+      <figcaption>R${p.level+1} · Picture ${i+1}: ${r?r.total:0} ${starStr(r?r.stars:0)}</figcaption></figure>`; }).join("");
+  renderBoard($("fBoard"), G.at);
+  putBuddy("finBuddy", "f", "side", "120px");
+  say("f", `Amazing battle, ${G.team.split(" ")[0]}! You scored ${score} points 🎉`, { cheer:true });
+  LS.del("pb-game"); SFX.level(); confetti(160);
+  $("homeBtn").onclick = ()=>{ G=null; showHome(); };
+}
+
+/* ---------- BACKGROUND: neural network animation ---------- */
+(function(){
+  const c = $("bg"), x = c.getContext("2d"), reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let W,H,nodes=[],pulses=[];
+  function size(){ const d = devicePixelRatio||1; W=c.width=innerWidth*d; H=c.height=innerHeight*d;
+    const n = Math.min(110, Math.round(innerWidth*innerHeight/14000));
+    nodes = Array.from({length:n},()=>({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.4*d,vy:(Math.random()-.5)*.4*d,r:(Math.random()*1.8+1)*d,h:Math.random()<.5?"63,224,255":"255,79,163"})); }
+  addEventListener("resize", size); size();
+  function frame(){
+    const d = devicePixelRatio||1; x.clearRect(0,0,W,H);
+    const D = 160*d;
+    for (const n of nodes){ n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>W) n.vx*=-1; if(n.y<0||n.y>H) n.vy*=-1; }
+    for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++){
+      const a=nodes[i], b=nodes[j], dist=Math.hypot(a.x-b.x,a.y-b.y);
+      if (dist<D){ x.strokeStyle=`rgba(140,120,255,${(1-dist/D)*.3})`; x.lineWidth=d; x.beginPath(); x.moveTo(a.x,a.y); x.lineTo(b.x,b.y); x.stroke();
+        if (!reduce && Math.random()<.0007) pulses.push({a,b,t:0}); } }
+    for (const n of nodes){ x.fillStyle=`rgba(${n.h},.9)`; x.beginPath(); x.arc(n.x,n.y,n.r,0,7); x.fill(); }
+    pulses = pulses.filter(p=>{ p.t+=.02; const px=p.a.x+(p.b.x-p.a.x)*p.t, py=p.a.y+(p.b.y-p.a.y)*p.t;
+      x.fillStyle="rgba(255,210,63,.95)"; x.beginPath(); x.arc(px,py,2.8*d,0,7); x.fill(); return p.t<1; });
+    if (!reduce) requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+/* ---------- CONFETTI ---------- */
+const confetti = (function(){
+  const c = $("confetti"), x = c.getContext("2d"); let parts=[], running=false;
+  const cols = ["#ff4fa3","#3fe0ff","#ffd23f","#41e39a","#ffffff"];
+  function loop(){ c.width=innerWidth; c.height=innerHeight; x.clearRect(0,0,c.width,c.height);
+    parts = parts.filter(p=>{ p.vy+=.18; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; x.save(); x.translate(p.x,p.y); x.rotate(p.rot); x.fillStyle=p.c; x.fillRect(-5,-3,10,6); x.restore(); return p.y<c.height+20; });
+    if (parts.length) requestAnimationFrame(loop); else { running=false; x.clearRect(0,0,c.width,c.height); } }
+  return n => { if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    for (let i=0;i<n;i++) parts.push({x:innerWidth/2+(Math.random()-.5)*300,y:innerHeight*.35,vx:(Math.random()-.5)*16,vy:-Math.random()*13-4,vr:(Math.random()-.5)*.4,rot:0,c:cols[i%cols.length]});
+    if (!running){ running=true; loop(); } };
+})();
+
+showHome();
+</script>
+</body>
+</html>
